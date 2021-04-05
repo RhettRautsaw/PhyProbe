@@ -4,7 +4,7 @@
 
 [Flowchart](https://docs.google.com/drawings/d/1YbIQsHFdcLFzGP--4vbma8IAR7dfUapjAgoFcXb25_E/edit?usp=sharing)
 
-1. Assembly: trinity
+1. Assembly: rnaSpades or Trinity
 2. BUSCO 4.1.4: tetrapoda_odb10
 	- BuscoCleaner.py:
 		- Check for duplicates in multi-copy and move to single copy
