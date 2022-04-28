@@ -328,7 +328,7 @@ parallel -a 00_loci.list -j 1 --workdir $PWD --bar --sshloginfile $SSH_NODES "
 	"
 ```
 
-### 4.1 Aligning and Trimming
+### 4.2 Aligning and Trimming
 Next, we will perform an alignment with MAFFT and several trimming steps with CIAlign, trimal, and `DropGappy` - a custom script to remove samples that cross a specified threshold for the amount of gaps in the alignment (70%).
 ```
 mkdir 01_aln 02_CIAlign 03_trimal 04_dropgappy
@@ -351,7 +351,7 @@ parallel -a 00_loci.list -j 1 --workdir $PWD --bar --sshloginfile $SSH_NODES "
 	"
 ```
 
-### Outlier Removal (Treeshrink)
+### 4.3. Outlier Removal (Treeshrink)
 Next, we will re-align and infer preliminary gene trees. These gene trees will be used by Treeshrink to identify dubious sequences in each locus fasta. 
 
 Treeshrink is a really neat program. Specifically, it will look across all of the genes to calculate the expected influence of a specific sample on tree diameter. For example, outgroups are expected to greatly increase tree diameter compared to ingroups. Therefore, if an ingroup sample greatly increases tree diameter in one specific locus/tree, it will be flagged as an outlier and removed from that alignment specifically (but retained in the trees where it was not flagged as an outlier). This method does well at removing potential paralogs that could influence tree inference. 
@@ -370,7 +370,7 @@ parallel -a 00_loci.list -j 1 --workdir $PWD --bar --sshloginfile $SSH_NODES "
 run_treeshrink.py -i 06_treeshrink -t input.tree -a input.fasta -c
 ```
 
-### Final Trimming
+### 4.4. Final Trimming
 With outliers removed, we will perform one more round of trimming
 ```
 mkdir 07_trimal
@@ -380,7 +380,7 @@ parallel -a 00_loci.list -j 1 --workdir $PWD --bar --sshloginfile $SSH_NODES "
 	"
 ```
 
-### Filtering for Missing Data
+### 4.5. Filtering for Missing Data
 If a loci is only found in 3 of 1000 loci, it is probably not very informative. We can filter for missing data using `FilterMissData` - a custom script to subset alignments for a specified amount of missingness on two different axes: 
 1) Filter for genes with a certain % of total taxa
 2) Filter for taxa with a certain % of total genes
@@ -389,7 +389,7 @@ cd 08_subsets
 FilterMissData.py -f 07_trimal -o 08_subsets -c 16
 ```
 
-### Gene Tree Inference
+### 4.6. Gene Tree Inference
 Using genes with > 25% total taxa and taxa with > 5% total genes as final dataset
 ```
 # Create list of loci
@@ -404,7 +404,7 @@ parallel -a 09_loci.list -j 1 --workdir $PWD --bar --sshloginfile $SSH_NODES "
 cat 08_subsets/Genes25Taxa_Taxa5Genes/*.treefile > 09_genetrees.tre
 ```
 
-### Species Tree Inference
+### 4.7. Species Tree Inference
 We recommend using Astral for species tree inference.
 ```
 # Rename samples in gene trees so that '|' is replaced by '_' to avoid problems with Astral
