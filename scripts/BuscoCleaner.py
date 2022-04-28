@@ -8,8 +8,8 @@ import csv
 import subprocess as sp
 import multiprocessing as mp
 import glob
-import pyfastx
-from dfply import *
+import copy
+import gc
 from p_tqdm import p_map
 try:
 	from Bio import SeqIO
@@ -53,9 +53,9 @@ parser.add_argument("-d","--delim",
 					type=str,
 					default='|',
 					help="Delimiter used to separate locus names from sample names (default: %(default)s)")
-#parser.add_argument("-a","--assembly",
-#					type=str,
-#					help="Original assembly on which BUSCO was performed \n Only required if fna files were not produced (default for BUSCO v5)")
+parser.add_argument("-a","--assembly",
+					type=str,
+					help="Original assembly on which BUSCO was performed \n Only required if fna files were not produced (default for BUSCO v5)")
 parser.add_argument("-c","--cpu",
 					type=int,
 					default=mp.cpu_count(),
@@ -74,25 +74,22 @@ def mkdir_p(path):
 			pass
 		else: raise
 
-def Distributor(seq):
-	locus=seq.id.split("_")[0]
-	contig=seq.id.split("|")[1]
-	seq.id = seq.name = seq.description = contig
-	if locus in sc_buscos:
-		ref_faa = [x.id.split(":")[0] for x in list(SeqIO.parse(sc_folder + "/" + locus + ".faa","fasta"))]
-		if contig in ref_faa:
-			with open(sc_folder + "/" + locus + ".fna", "a") as output_handle:
-				SeqIO.write(seq, output_handle, "fasta")
-	if locus in mc_buscos:
-		ref_faa = [x.id.split(":")[0] for x in list(SeqIO.parse(mc_folder + "/" + locus + ".faa","fasta"))]
-		if contig in ref_faa:
-			with open(mc_folder + "/" + locus + ".fna", "a") as output_handle:
-				SeqIO.write(seq, output_handle, "fasta")
-	if locus in frag_buscos:
-		ref_faa = [x.id.split(":")[0] for x in list(SeqIO.parse(frag_folder + "/" + locus + ".faa","fasta"))]
-		if contig in ref_faa:
-			with open(frag_folder + "/" + locus + ".fna", "a") as output_handle:
-				SeqIO.write(seq, output_handle, "fasta")
+def Distributor(file):
+	new_file=file.replace(".faa",".fna")
+	new_file_seqs=[]
+	locus=file.split("/")[-1].split(".")[0]
+	locus_seqs=list(SeqIO.parse(file,"fasta"))
+	for seq in locus_seqs:
+		contig=seq.id.split(":")[0]
+		start=int(seq.id.split(":")[1].split("-")[0])+1
+		end=int(seq.id.split(":")[1].split("-")[1])+1
+		for acontig in assembly:
+			if acontig.id == contig:
+				tmp=copy.deepcopy(acontig)
+				tmp.seq=tmp.seq[start:end]
+				tmp.id=seq.id
+				new_file_seqs.append(tmp)
+	SeqIO.write(new_file_seqs, new_file, "fasta")
 
 def mcChecker(locus):
 	sp.call("cd-hit-est -i " + locus + " -o " + locus + ".clust.fasta -d 0 -c 1 &> " + locus + ".clust.log", shell=True)
@@ -112,7 +109,7 @@ def Renamer(locus):
 	locus_name=locus.split('/')[-1]
 	locus_name=locus_name.split(".fna")[0]
 	sp.call("sed 's/>.*/>" + locus_name + "\\" + delim + name + "/g' " + locus + " > " + os.path.join(folder,"BuscoCleaner",locus_name) + ".fasta", shell=True)
-	sp.call("cat " + os.path.join(folder,"BuscoCleaner",locus_name) + ".fasta >> " + folder + "/" + name + ".busco.fasta", shell=True)
+	sp.call("cat " + os.path.join(folder,"BuscoCleaner",locus_name) + ".fasta >> " + folder + "/" + name + "_busco.fasta", shell=True)
 
 ########################################
 ################# SETUP ################
@@ -136,6 +133,13 @@ frag_folder = glob.glob(folder + "/run_*/busco_sequences/fragmented_busco_sequen
 
 tmp_count = glob.glob(sc_folder + "/*.fna")
 
+if len(tmp_count)==0:
+	if args.assembly==None:
+		print("No assembly specified, but is required because no fna files exist")
+		print("Use -a/--assembly flag to specify input assembly")
+	else:
+		assembly_name = os.path.abspath(args.assembly)
+
 delim = args.delim
 cpus = args.cpu
 
@@ -156,6 +160,7 @@ Delimiter | can be changed with the -d flag.
 print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: starting BuscoCleaner...")
 print("\tBUSCO output folder -> "+ args.folder)
 print("\tSample name -> "+ args.name)
+print("\tOriginal assembly -> "+ args.assembly)
 print("\tDelimiter -> " + delim)
 print("\tNumber of CPU -> "+ str(cpus))
 
@@ -166,15 +171,24 @@ print("\tNumber of CPU -> "+ str(cpus))
 #### CREATING FNA FILES
 if len(tmp_count)==0:
 	print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: Creating fna files :::")
-	 
-	metaeuk_output = glob.glob(folder + "/run*/metaeuk_output/*.codon.fas")[0]
-	metaeuk_output = list(SeqIO.parse(metaeuk_output,"fasta"))
+	print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: Reading Original Assembly :::")
 	
-	sc_buscos = [x.split("/")[-1].split(".")[0] for x in glob.glob(sc_folder + "/*.faa")]
-	mc_buscos = [x.split("/")[-1].split(".")[0] for x in glob.glob(mc_folder + "/*.faa")]
-	frag_buscos = [x.split("/")[-1].split(".")[0] for x in glob.glob(frag_folder + "/*.faa")]
+	assembly=list(SeqIO.parse(assembly_name,"fasta"))
+
+	sc_buscos = glob.glob(sc_folder + "/*.faa")
+	mc_buscos = glob.glob(mc_folder + "/*.faa")
+	frag_buscos = glob.glob(frag_folder + "/*.faa")
 	
-	p_map(Distributor, metaeuk_output, num_cpus=cpus)
+	print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: Grabbing Single-Copy Loci :::")
+	p_map(Distributor, sc_buscos, num_cpus=cpus)
+	gc.collect()
+	print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: Grabbing Multi-Copy Loci :::")
+	p_map(Distributor, mc_buscos, num_cpus=cpus)
+	gc.collect()
+	print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: Grabbing Fragmented Loci :::")
+	p_map(Distributor, frag_buscos, num_cpus=cpus)
+	del assembly
+	gc.collect()
 
 #### CHECKING FOR DUPLICATES IN MULTI-COPY FNA FILES
 print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: Checking for 100% Duplicates in Multi-Copy Sequence Folder :::")
@@ -201,3 +215,6 @@ print("New Multi Copy Busco Loci: "+ str(len(mc_fnas2)))
 print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: Renaming and Concatenating Loci into " + folder + "/BuscoCleaner :::")
 mkdir_p(folder+"/BuscoCleaner")
 results=p_map(Renamer, sc_fnas2, num_cpus=cpus)
+
+if args.output!=None:
+	sp.call("cat " + folder + "/" + name + "+_busco.fasta >> " + os.path.join(os.path.abspath(args.output),"busco_loci.fasta"), shell=True)

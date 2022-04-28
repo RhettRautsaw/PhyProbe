@@ -8,7 +8,6 @@ import csv
 import subprocess as sp
 import gzip
 from tqdm import tqdm
-from p_tqdm import p_map
 from dfply import *
 try:
 	from Bio import SeqIO
@@ -96,16 +95,16 @@ def SeqSorter(seq):
 ########################################
 
 input=os.path.abspath(args.input)
-folder=input.split("/")[:-1]
-folder='/'.join(folder)
+folder=os.path.dirname(input)
 delim = args.delim
-pos = args.pos
+pos = args.position
 cpus = args.cpu
 
 print("\n"+dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" ::: starting SeqSorter...")
-print("\tInput -> "+ input)
-print("\tDelim -> "+ delim)
-print("\tThreads -> "+ str(cpus))
+print("\tInput:\t"+ input)
+print("\tDelim:\t"+ delim)
+print("\tPos:\t"+ str(pos))
+print("\tCPUs:\t"+ str(cpus))
 
 ########################################
 ################# CODE #################
@@ -114,6 +113,19 @@ print("\tThreads -> "+ str(cpus))
 print(dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ::: Reading ' + args.input)
 sequences = list(SeqIO.parse(input,"fasta"))
 
-print(dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ::: Parsing sequences into samples :::')
+d={}
+print(dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ::: Parsing sequences :::')
+for seq in tqdm(sequences):
+	sample=seq.name.split(delim)[pos]
+	if sample not in d:
+		d.setdefault(sample, [])
+		d[sample].append(seq)
+	else:
+		d[sample].append(seq)
+
 mkdir_p(folder + '/SeqSorter')
-results = p_map(SeqSorter, sequences, num_cpus=cpus)
+for locus in tqdm(d):
+	tmp_list=d[locus]
+	output_handle = open(folder + "/SeqSorter/" + locus + '.fasta','w')
+	SeqIO.write(tmp_list, output_handle, "fasta")
+	output_handle.close()
