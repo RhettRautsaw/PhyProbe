@@ -9,6 +9,9 @@
 
 ## Rhett M. Rautsaw
 
+[![](https://img.shields.io/badge/Published%20in-In%20Prep-blue)]()
+[![](https://img.shields.io/badge/License-GNU%20GPLv3.0-blue)](https://choosealicense.com/licenses/gpl-3.0/)
+
 ***
 
 <center>
@@ -27,6 +30,17 @@ Specifically, **PhyProbe** extracts three categories of loci:
 3. Misc. protein-coding genes (RNAseq data only)
 
 If using multiple datatypes (multi-omics), we recommend processing RNAseq data first since it is a versatile datatype. By processing RNAseq data first, you can capture BUSCOs and Transcripts that can then be used as targets for the other additional datatypes. Not only will this speed up processing, but ensures that paralogs are removed from BUSCO results and that additional Transcript-based loci can be captured from other datatypes.
+
+<br>
+
+# Table of Contents
+- [Installation](#installation)
+- [Pipeline](#pipeline)
+- [Running PhyProbe](#running-phyprobe)
+- [Manual Walkthrough](#manual-walkthrough)
+- [Citation](#citation)
+
+<br>
 
 # Installation
 The list of dependencies is a mile long... I will work on containerizing later, but for now this is the best I can do. We recommend installing them via [Anaconda](https://www.anaconda.com/products/distribution)/[Mamba](https://github.com/mamba-org/mamba) as below.
@@ -143,9 +157,31 @@ PhyProbe.py -m phylo -i all_samples.list -c 16
 ```
 
 # Manual Walkthrough
-If you can't install all the dependencies into one environment, this section will walk through the steps PhyProbe uses for you to replicate if you want. This section assumes you have multiple data types (multi-omics); therefore, we will start with the RNA-Seq data processing.
+If you can't install all the dependencies into one environment, this section will walk through the steps PhyProbe uses for you to replicate if you want. This section assumes you have multiple data types (multi-omics); therefore, we will start with the RNA-Seq data processing. Note that all "custom scripts" can be found in this repository or the linked repository.
 
-Note that all "custom scripts" can be found in this repository or the linked repository.
+## Manual Walkthrough Table of Contents
+
+- [1.0 Processing RNA-Seq Samples](#10-processing-rna-seq-samples)
+	- [1.1. Assembly (rnaSpades)](#11-assembly-rnaspades)
+	- [1.2. BUSCO](#12-busco)
+	- [1.3. Transcript Identification (CodAn)](#13-transcript-identification-codan)
+- [2.0. Creating Reference Databases](#20-creating-reference-databases)
+	- [2.2. BUSCO Database](#22-busco-database)
+	- [2.1. Transcript Database](#21-transcript-database)
+- [3.0. Extracting Loci](#30-extracting-loci)
+	- [3.1. Assembly (rnaSpades or MaSuRCA)](#31-assembly-rnaspades-or-masurca)
+	- [3.2. Target Capture (AliBaSeq)](#32-target-capture-alibaseq)
+	- [3.3. Combine Loci](#33-combine-loci)
+	- [3.4. Phasing (Variant Calling & WhatsHap)](#34-phasing-variant-calling--whatshap)
+- [4.0 Phylogenetics](#40-phylogenetics)
+	- [4.1 Combining Samples & Separating Loci](#41-combining-samples--separating-loci)
+	- [4.2 Aligning and Trimming](#42-aligning-and-trimming)
+	- [4.3. Outlier Removal (Treeshrink)](#43-outlier-removal-treeshrink)
+	- [4.4. Final Trimming](#44-final-trimming)
+	- [4.5. Filtering for Missing Data](#45-filtering-for-missing-data)
+	- [4.6. Gene Tree Inference](#46-gene-tree-inference)
+	- [4.7. Species Tree Inference](#47-species-tree-inference)
+
 
 ## 1.0 Processing RNA-Seq Samples
 For **each** RNA sample, the following steps are taken:
@@ -162,7 +198,7 @@ cp 01_assembly.fasta 01_renamed.fasta
 FastaRenamer.py -f 01_renamed.fasta -n contig
 ```
 
-### 1.2 BUSCO
+### 1.2. BUSCO
 Next, we will run BUSCO (v5) to identify our first set of loci. We follow this up with `BuscoCleaner` - a custom script to produce fastas from the faa produced from BUSCO and check for 100% identical duplicates in the multi-copy loci. It will also rename all BUSCO fastas and concatenate them into a single file.
 ```
 busco -i 01_renamed.fasta -c 16 -o 02_busco -m geno -l 2020-10_tetrapoda_odb10
@@ -221,7 +257,7 @@ OrthoCleaner.py -f 00_ortho_res -d '|' -c 16 -p 50
 ## 3.0. Extracting Loci
 We can now use the databases above to extract more confident orthologs from the RNA-Seq data as well as search for additional loci in the other datatypes (e.g., SeqCap, WGS, etc.)
 
-### 3.1 Assembly (rnaSpades or MaSuRCA)
+### 3.1. Assembly (rnaSpades or MaSuRCA)
 If the data were not already assembled above, you will first want first assemble it using either rnaSpades (for RNA, SeqCap, etc.)
 ```
 rnaspades.py -1 SAMPLE-NAME_R1.fastq.gz -2 SAMPLE-NAME_R2.fastq.gz -t 16 -m 62 -o 01_assembly
@@ -416,3 +452,6 @@ nw_ed  10_genetrees.tree 'i & b<=10' o > 10_genetrees-BS10.tree
 # Create a mapfile and run Astral
 java -jar astral.5.15.4.jar -i 10_genetrees-BS10.tree -o 10_astral.tre -C -T 16 -a 10_mapfile.txt
 ```
+
+# Citation
+This page and the corresponding publication are under development. I will update this section with the publication once complete. If you use this pipeline prior its publication, please cite this GitHub repository.
